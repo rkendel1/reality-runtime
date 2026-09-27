@@ -132,12 +132,14 @@ export class RealityRuntime {
     if (existing) {
       return toParticipant(existing);
     }
+    const resolvedDisplayName = displayName ?? participant?.displayName;
+    const resolvedRole = role ?? participant?.role;
     const resolvedReality = reality ?? await this.resolveReality();
     const record = {
       id: normalizedParticipant.id,
       kind: normalizedParticipant.kind,
-      display_name: displayName,
-      role,
+      display_name: resolvedDisplayName,
+      role: resolvedRole,
       created_at: new Date().toISOString(),
       reality_application: resolvedReality.application,
       reality_environment: resolvedReality.environment,

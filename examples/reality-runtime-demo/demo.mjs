@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { randomUUID } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { createRealityRuntime } from '../../src/index.js';
 
@@ -223,7 +224,7 @@ async function applyDemoAction(db, experience, action) {
   if (action?.type === 'update-project-status') {
     await workspaceCollection.update(action.workspaceId ?? WORKSPACE_ID, { status: action.status });
     await events.insert({
-      id: `event-${Date.now()}`,
+      id: makeEventId(),
       workspace: action.workspaceId ?? WORKSPACE_ID,
       participant_id: experience.participant.id,
       kind: action.type,
@@ -239,7 +240,7 @@ async function applyDemoAction(db, experience, action) {
       updated_at: timestamp,
     });
     await events.insert({
-      id: `event-${Date.now()}`,
+      id: makeEventId(),
       workspace: WORKSPACE_ID,
       participant_id: experience.participant.id,
       kind: action.type,
@@ -256,7 +257,7 @@ async function applyDemoAction(db, experience, action) {
       updated_at: timestamp,
     });
     await events.insert({
-      id: `event-${Date.now()}`,
+      id: makeEventId(),
       workspace: WORKSPACE_ID,
       participant_id: experience.participant.id,
       kind: action.type,
@@ -292,6 +293,10 @@ function renderBox(title, lines, width = 40) {
 function logStep(title, description) {
   console.log(`\n${title}`);
   console.log(description);
+}
+
+function makeEventId() {
+  return `event-${randomUUID()}`;
 }
 
 function waitForTaskState(experience, taskId, status) {
