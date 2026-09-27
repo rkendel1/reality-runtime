@@ -352,41 +352,4 @@ test('re-enter reconstructs journey against the latest shared reality after rest
   assert.equal(view.tasks.find(task => task.id === 'task-1')?.status, 'done');
 });
 
-test('embedded FeltDB file runtime currently allows cross-user self(field) writes', async () => {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'embedded-auth-gap-'));
-  const flowSource = `flow_version 1
-app EmbeddedAuthGap {
-  collection PrivateNote {
-    owner_id: text
-    text: text
-    index owner_id using hash(owner_id)
-  }
-
-  policy PrivateNote {
-    read: self(owner_id)
-    write: self(owner_id)
-  }
-}`;
-  const runtime = await createRealityRuntime({
-    namespace: 'embedded-auth-gap-tests',
-    path: path.join(root, 'db'),
-    flowSource,
-    projectionCollections: ['PrivateNote'],
-  });
-
-  await runtime.db.auth.signUp({ email: 'alice@example.com', password: 'pw123456', display_name: 'Alice' });
-  await runtime.db.collection('PrivateNote').insert({
-    id: 'note-1',
-    owner_id: 'alice@example.com',
-    text: 'owned-by-alice',
-  }, 'note-1');
-
-  await runtime.db.auth.signOut();
-  await runtime.db.auth.signUp({ email: 'bob@example.com', password: 'pw123456', display_name: 'Bob' });
-  await runtime.db.collection('PrivateNote').update('note-1', { text: 'changed-by-bob' });
-
-  const record = await runtime.db.collection('PrivateNote').get('note-1');
-  assert.equal(record.text, 'changed-by-bob');
-});
-
 test('embedded FeltDB file runtime should eventually deny cross-user self(field) writes', { todo: 'Blocked on participant-scoped authorization enforcement in the public embedded @feltdb/core runtime.' }, () => {});

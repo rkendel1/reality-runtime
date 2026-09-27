@@ -132,6 +132,7 @@ export class RealityRuntime {
     const roleProvided = role !== undefined || Object.prototype.hasOwnProperty.call(participant ?? {}, 'role');
     const resolvedDisplayName = displayName !== undefined ? displayName : participant?.displayName;
     const resolvedRole = role !== undefined ? role : participant?.role;
+    const resolvedReality = reality ?? await this.resolveReality();
     const existing = await this.participants.get(normalizedParticipant.id);
     if (existing) {
       const updates = {};
@@ -141,13 +142,21 @@ export class RealityRuntime {
       if (roleProvided && (existing.role ?? null) !== (resolvedRole ?? null)) {
         updates.role = resolvedRole ?? null;
       }
+      if (existing.reality_application !== resolvedReality.application) {
+        updates.reality_application = resolvedReality.application;
+      }
+      if ((existing.reality_environment ?? null) !== (resolvedReality.environment ?? null)) {
+        updates.reality_environment = resolvedReality.environment ?? null;
+      }
+      if ((existing.reality_flow_revision ?? null) !== (resolvedReality.flowRevision ?? null)) {
+        updates.reality_flow_revision = resolvedReality.flowRevision ?? null;
+      }
       if (Object.keys(updates).length) {
         await this.participants.update(normalizedParticipant.id, updates);
         return toParticipant({ ...existing, ...updates });
       }
       return toParticipant(existing);
     }
-    const resolvedReality = reality ?? await this.resolveReality();
     const record = {
       id: normalizedParticipant.id,
       kind: normalizedParticipant.kind,
