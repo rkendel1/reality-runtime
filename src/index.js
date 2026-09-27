@@ -109,7 +109,7 @@ export class RealityRuntime {
   async createJourney({ id = makeId('journey'), subject, goal, status = 'active', completedAt, startedAt = new Date().toISOString() }) {
     const participant = normalizeParticipant(subject);
     const reality = await this.resolveReality();
-    await this.ensureParticipant({ participant, reality });
+    await this.ensureParticipant({ participant: subject, reality });
     const journey = {
       id,
       subject_id: participant.id,
@@ -181,7 +181,7 @@ export class RealityRuntime {
       throw new InvalidPerspectiveError('spawn() received both journey and reality, but they refer to different realities.');
     }
     const resolvedReality = resolvedJourney ? journeyReality(resolvedJourney) : await this.#resolveRealityOverride(reality);
-    await this.ensureParticipant({ participant: normalizedParticipant, reality: resolvedReality });
+    await this.ensureParticipant({ participant, reality: resolvedReality });
     const presenceRecord = {
       id: makeId('presence'),
       participant_id: normalizedParticipant.id,

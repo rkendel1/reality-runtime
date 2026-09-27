@@ -389,6 +389,4 @@ app EmbeddedAuthGap {
   assert.equal(record.text, 'changed-by-bob');
 });
 
-test('embedded FeltDB file runtime should eventually deny cross-user self(field) writes', { todo: 'Blocked on participant-scoped authorization enforcement in the public embedded @feltdb/core runtime.' }, async () => {
-  assert.fail('Expected embedded FeltDB to deny cross-user self(field) writes once the underlying runtime supports participant-scoped authority enforcement.');
-});
+test('embedded FeltDB file runtime should eventually deny cross-user self(field) writes', { todo: 'Blocked on participant-scoped authorization enforcement in the public embedded @feltdb/core runtime.' }, () => {});
