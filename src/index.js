@@ -128,12 +128,23 @@ export class RealityRuntime {
 
   async ensureParticipant({ participant, displayName, role, reality } = {}) {
     const normalizedParticipant = normalizeParticipant(participant);
-    const existing = await this.participants.get(normalizedParticipant.id);
-    if (existing) {
-      return toParticipant(existing);
-    }
     const resolvedDisplayName = displayName ?? participant?.displayName;
     const resolvedRole = role ?? participant?.role;
+    const existing = await this.participants.get(normalizedParticipant.id);
+    if (existing) {
+      const updates = {};
+      if (resolvedDisplayName && existing.display_name !== resolvedDisplayName) {
+        updates.display_name = resolvedDisplayName;
+      }
+      if (resolvedRole && existing.role !== resolvedRole) {
+        updates.role = resolvedRole;
+      }
+      if (Object.keys(updates).length) {
+        await this.participants.update(normalizedParticipant.id, updates);
+        return toParticipant({ ...existing, ...updates });
+      }
+      return toParticipant(existing);
+    }
     const resolvedReality = reality ?? await this.resolveReality();
     const record = {
       id: normalizedParticipant.id,

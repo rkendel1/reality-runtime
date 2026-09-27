@@ -352,7 +352,7 @@ test('re-enter reconstructs journey against the latest shared reality after rest
   assert.equal(view.tasks.find(task => task.id === 'task-1')?.status, 'done');
 });
 
-test('embedded FeltDB self(field) enforcement is captured as a compatibility probe', async t => {
+test('embedded FeltDB file runtime currently allows cross-user self(field) writes', async () => {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'embedded-auth-gap-'));
   const flowSource = `flow_version 1
 app EmbeddedAuthGap {
@@ -383,20 +383,12 @@ app EmbeddedAuthGap {
 
   await runtime.db.auth.signOut();
   await runtime.db.auth.signUp({ email: 'bob@example.com', password: 'pw123456', display_name: 'Bob' });
-  let updateRejected = false;
-  try {
-    await runtime.db.collection('PrivateNote').update('note-1', { text: 'changed-by-bob' });
-  } catch {
-    updateRejected = true;
-  }
+  await runtime.db.collection('PrivateNote').update('note-1', { text: 'changed-by-bob' });
 
   const record = await runtime.db.collection('PrivateNote').get('note-1');
-  if (updateRejected || record.text === 'owned-by-alice') {
-    t.diagnostic('Embedded runtime enforced self(field) for this compatibility probe.');
-    assert.equal(record.text, 'owned-by-alice');
-    return;
-  }
-
-  t.diagnostic('Embedded runtime currently allows cross-user self(field) writes in this compatibility probe.');
   assert.equal(record.text, 'changed-by-bob');
+});
+
+test('embedded FeltDB file runtime should eventually deny cross-user self(field) writes', { todo: 'Blocked on participant-scoped authorization enforcement in the public embedded @feltdb/core runtime.' }, async () => {
+  assert.fail('Expected embedded FeltDB to deny cross-user self(field) writes once the underlying runtime supports participant-scoped authority enforcement.');
 });
