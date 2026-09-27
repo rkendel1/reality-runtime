@@ -86,6 +86,7 @@ export class RealityRuntime {
   constructor({ db, flowSpec, projectionCollections, listActions, act }) {
     this.db = db;
     this.flowSpec = flowSpec;
+    this.participants = db.collection('Participant');
     this.journeys = db.collection('Journey');
     this.presences = db.collection('Presence');
     this.projectionCollections = [...new Set(projectionCollections)];
@@ -108,6 +109,7 @@ export class RealityRuntime {
   async createJourney({ id = makeId('journey'), subject, goal, status = 'active', completedAt, startedAt = new Date().toISOString() }) {
     const participant = normalizeParticipant(subject);
     const reality = await this.resolveReality();
+    await this.ensureParticipant({ participant, reality });
     const journey = {
       id,
       subject_id: participant.id,
@@ -124,6 +126,33 @@ export class RealityRuntime {
     return toJourney(journey);
   }
 
+  async ensureParticipant({ participant, displayName, role, reality } = {}) {
+    const normalizedParticipant = normalizeParticipant(participant);
+    const existing = await this.participants.get(normalizedParticipant.id);
+    if (existing) {
+      return toParticipant(existing);
+    }
+    const resolvedReality = reality ?? await this.resolveReality();
+    const record = {
+      id: normalizedParticipant.id,
+      kind: normalizedParticipant.kind,
+      display_name: displayName,
+      role,
+      created_at: new Date().toISOString(),
+      reality_application: resolvedReality.application,
+      reality_environment: resolvedReality.environment,
+      reality_flow_revision: resolvedReality.flowRevision,
+    };
+    await this.participants.insert(record, record.id);
+    return toParticipant(record);
+  }
+
+  async getParticipant(participantId) {
+    const participant = await this.participants.get(participantId);
+    if (!participant) throw new ParticipantNotFoundError(participantId);
+    return toParticipant(participant);
+  }
+
   async getJourney(journeyId) {
     const journey = await this.journeys.get(journeyId);
     if (!journey) throw new JourneyNotFoundError(journeyId);
@@ -137,6 +166,7 @@ export class RealityRuntime {
       throw new InvalidPerspectiveError('spawn() received both journey and reality, but they refer to different realities.');
     }
     const resolvedReality = resolvedJourney ? journeyReality(resolvedJourney) : await this.#resolveRealityOverride(reality);
+    await this.ensureParticipant({ participant: normalizedParticipant, reality: resolvedReality });
     const presenceRecord = {
       id: makeId('presence'),
       participant_id: normalizedParticipant.id,
@@ -441,6 +471,21 @@ function toPresence(presence) {
     },
     enteredAt: Date.parse(presence.entered_at),
     exitedAt: presence.exited_at ? Date.parse(presence.exited_at) : undefined,
+  };
+}
+
+function toParticipant(participant) {
+  return {
+    id: participant.id,
+    kind: participant.kind,
+    displayName: participant.display_name ?? undefined,
+    role: participant.role ?? undefined,
+    createdAt: Date.parse(participant.created_at),
+    reality: {
+      application: participant.reality_application,
+      environment: participant.reality_environment ?? undefined,
+      flowRevision: participant.reality_flow_revision ?? undefined,
+    },
   };
 }
 
