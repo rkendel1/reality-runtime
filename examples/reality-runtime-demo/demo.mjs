@@ -199,9 +199,11 @@ export async function runDemo() {
   logStep('6 — Leave', 'Bob leaves. The shared world, his journey, and the authoritative state remain.');
 
   const restartedRuntime = await createDemoRuntime({ dataPath });
+  const resumedAlice = await restartedRuntime.enter({ participant: DEMO_PARTICIPANTS.alice, journeyId: journeys.alice.id });
   const resumedBob = await restartedRuntime.enter({ participant: DEMO_PARTICIPANTS.bob, journeyId: journeys.bob.id });
+  const resumedAgent = await restartedRuntime.enter({ participant: DEMO_PARTICIPANTS.agent, journeyId: journeys.agent.id });
   logStep('7 — Restart and re-enter', 'A new runtime instance reconstructs Bob from FeltDB + .flow + participant + journey history.');
-  console.log(renderPanels([alice.snapshot(), resumedBob.snapshot(), agent.snapshot()]));
+  console.log(renderPanels([resumedAlice.snapshot(), resumedBob.snapshot(), resumedAgent.snapshot()]));
 
   return { root, dataPath };
 }

@@ -128,16 +128,18 @@ export class RealityRuntime {
 
   async ensureParticipant({ participant, displayName, role, reality } = {}) {
     const normalizedParticipant = normalizeParticipant(participant);
-    const resolvedDisplayName = displayName ?? participant?.displayName;
-    const resolvedRole = role ?? participant?.role;
+    const displayNameProvided = displayName !== undefined || Object.prototype.hasOwnProperty.call(participant ?? {}, 'displayName');
+    const roleProvided = role !== undefined || Object.prototype.hasOwnProperty.call(participant ?? {}, 'role');
+    const resolvedDisplayName = displayName !== undefined ? displayName : participant?.displayName;
+    const resolvedRole = role !== undefined ? role : participant?.role;
     const existing = await this.participants.get(normalizedParticipant.id);
     if (existing) {
       const updates = {};
-      if (resolvedDisplayName && existing.display_name !== resolvedDisplayName) {
-        updates.display_name = resolvedDisplayName;
+      if (displayNameProvided && (existing.display_name ?? null) !== (resolvedDisplayName ?? null)) {
+        updates.display_name = resolvedDisplayName ?? null;
       }
-      if (resolvedRole && existing.role !== resolvedRole) {
-        updates.role = resolvedRole;
+      if (roleProvided && (existing.role ?? null) !== (resolvedRole ?? null)) {
+        updates.role = resolvedRole ?? null;
       }
       if (Object.keys(updates).length) {
         await this.participants.update(normalizedParticipant.id, updates);
@@ -149,8 +151,8 @@ export class RealityRuntime {
     const record = {
       id: normalizedParticipant.id,
       kind: normalizedParticipant.kind,
-      display_name: resolvedDisplayName,
-      role: resolvedRole,
+      display_name: displayNameProvided ? (resolvedDisplayName ?? null) : undefined,
+      role: roleProvided ? (resolvedRole ?? null) : undefined,
       created_at: new Date().toISOString(),
       reality_application: resolvedReality.application,
       reality_environment: resolvedReality.environment,
