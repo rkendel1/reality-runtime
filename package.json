@@ -1,0 +1,27 @@
+{
+  "name": "reality-runtime",
+  "version": "0.1.0",
+  "description": "Small reality runtime built on the real @feltdb/core APIs",
+  "type": "module",
+  "main": "./src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "scripts": {
+    "test": "node --test tests/*.test.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "http://localhost:26831/rkendel1/reality-runtime"
+  },
+  "keywords": [
+    "feltdb",
+    "runtime",
+    "reality"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "@feltdb/core": "^0.11.8"
+  }
+}
