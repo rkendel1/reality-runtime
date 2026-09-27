@@ -1,0 +1,644 @@
+{
+  "auditedRepository": "rkendel1/appport-services",
+  "auditedRef": "f3a80fe187a26d5f559111f3d0080a0ba6700023",
+  "observedPackagesAtRef": [
+    {
+      "name": "@appport/services",
+      "version": "0.4.5",
+      "role": "root services package and CLI"
+    },
+    {
+      "name": "@appport/runtime",
+      "version": "0.4.5",
+      "role": "application runtime facade"
+    },
+    {
+      "name": "create-appport",
+      "version": "0.1.8",
+      "role": "application scaffolder"
+    }
+  ],
+  "contracts": {
+    "actualCoreDependency": false,
+    "feltDbDependencyPackage": "@feltdb/core",
+    "feltDbDependencySource": "package.json",
+    "contractSources": [
+      "appport.flow",
+      "src/index.ts",
+      "src/authority/manifest.ts",
+      "src/runtime/appport.ts",
+      "src/api-keys/models.ts",
+      "src/webhooks/models.ts",
+      "src/jobs/models.ts",
+      "src/schedules/models.ts",
+      "src/notifications/models.ts",
+      "src/files/models.ts",
+      "src/configuration/models.ts",
+      "src/secrets/models.ts",
+      "src/secrets/protocol.ts"
+    ]
+  },
+  "crossCuttingFindings": {
+    "policyEnforcementPoint": "ServiceGateway",
+    "durableStore": "FeltDB via appport.flow",
+    "hiddenMutableState": [
+      {
+        "name": "AppPortEvents",
+        "kind": "process-local in-memory event bus",
+        "durable": false,
+        "notes": "Used for SSE replay and publish fan-out; bounded retention only."
+      }
+    ],
+    "confirmedGaps": [
+      {
+        "id": "missing-appport-core-contract-package",
+        "scope": "repository",
+        "status": "confirmed",
+        "description": "No actual @appport/core dependency or separate shared contract package was found in the audited revision.",
+        "sources": [
+          "package.json",
+          "packages/runtime/package.json",
+          "packages/create-appport/package.json",
+          "src/index.ts"
+        ]
+      },
+      {
+        "id": "secrets-surface-incomplete",
+        "scope": "capability",
+        "status": "confirmed",
+        "description": "Secrets are mostly types/protocol/flow metadata, not a complete operational runtime capability in the audited revision.",
+        "sources": [
+          "src/secrets/index.ts",
+          "src/secrets/models.ts",
+          "src/secrets/errors.ts",
+          "src/secrets/protocol.ts",
+          "src/runtime/appport.ts",
+          "appport.flow"
+        ]
+      },
+      {
+        "id": "configuration-not-mounted-by-default",
+        "scope": "runtime-surface",
+        "status": "confirmed",
+        "description": "The built-in runtime does not mount configuration/UI by default in the audited revision.",
+        "sources": [
+          "src/configuration/http.ts",
+          "src/configuration/ui.ts",
+          "src/runtime/platform.ts",
+          "src/runtime/management.ts"
+        ]
+      },
+      {
+        "id": "cli-coverage-narrower-than-capabilities",
+        "scope": "cli-surface",
+        "status": "confirmed",
+        "description": "CLI coverage is narrower than the overall capability surface in the audited revision.",
+        "sources": [
+          "src/cli.ts",
+          "src/runtime/platform.ts",
+          "src/runtime/management.ts",
+          "src/runtime/appport.ts"
+        ]
+      },
+      {
+        "id": "examples-lag-template",
+        "scope": "examples",
+        "status": "confirmed",
+        "description": "Examples lag the root capability template in the audited revision.",
+        "sources": [
+          "examples/services-demo/feltdb.flow",
+          "appport.flow",
+          "examples/README.md"
+        ]
+      },
+      {
+        "id": "in-memory-event-bus-not-durable",
+        "scope": "runtime-surface",
+        "status": "confirmed",
+        "description": "The in-process event bus is not durable across restarts or across providers in the audited revision.",
+        "sources": [
+          "src/runtime/platform.ts",
+          "src/runtime/appport.ts"
+        ]
+      }
+    ]
+  },
+  "capabilities": [
+    {
+      "id": "api-keys",
+      "name": "API keys",
+      "status": "implemented",
+      "qualifiesAsCapability": true,
+      "capabilityNames": [
+        "apikeys.read",
+        "apikeys.create",
+        "apikeys.revoke"
+      ],
+      "contractDefinedIn": [
+        "src/api-keys/models.ts",
+        "src/api-keys/service.ts",
+        "src/runtime/appport.ts",
+        "src/runtime/http-adapter.ts",
+        "src/runtime/express-middleware.ts"
+      ],
+      "implementation": [
+        "src/api-keys/service.ts",
+        "src/storage/api-keys.ts"
+      ],
+      "durableState": [
+        "ApiKeys",
+        "ApiKeyPrefixes",
+        "ApiKeyAuditEvents"
+      ],
+      "authority": {
+        "owner": "tenant + application",
+        "principalModel": "verified principal; API key itself is identity only",
+        "enforcementPoint": "ServiceGateway"
+      },
+      "lifecycle": [
+        "create",
+        "active",
+        "expire",
+        "revoke",
+        "last-used audit"
+      ],
+      "surfaces": {
+        "sdk": "implemented",
+        "runtime": "implemented",
+        "http": "implemented",
+        "cli": "implemented",
+        "tests": "implemented",
+        "docs": "implemented"
+      },
+      "portability": {
+        "portable": true,
+        "notes": "Portable as a service contract, but not split into an external shared contract package."
+      },
+      "gaps": [
+        "No first-class rotation operation.",
+        "No ownership transfer operation.",
+        "Scopes remain in schema but are rejected for authority."
+      ]
+    },
+    {
+      "id": "webhooks",
+      "name": "Webhooks",
+      "status": "implemented",
+      "qualifiesAsCapability": true,
+      "capabilityNames": [
+        "webhooks.read",
+        "webhooks.register",
+        "webhooks.remove",
+        "webhooks.emit",
+        "webhooks.replay",
+        "webhooks.integrations.register",
+        "webhooks.deliver",
+        "webhooks.receive"
+      ],
+      "contractDefinedIn": [
+        "src/webhooks/models.ts",
+        "src/webhooks/service.ts",
+        "src/runtime/appport.ts",
+        "src/runtime/platform.ts",
+        "src/runtime/management.ts"
+      ],
+      "implementation": [
+        "src/webhooks/service.ts",
+        "src/webhooks/secrets.ts",
+        "src/storage/webhooks.ts"
+      ],
+      "durableState": [
+        "WebhookEndpoints",
+        "WebhookDeliveries",
+        "WebhookAuditEvents",
+        "WebhookIntegrations",
+        "InboundWebhookEvents"
+      ],
+      "authority": {
+        "owner": "tenant + application",
+        "principalModel": "verified principal for mutation; attested durable principal for delivery; integration principal for inbound receipts",
+        "enforcementPoint": "ServiceGateway"
+      },
+      "lifecycle": [
+        "register endpoint",
+        "active",
+        "disable/remove",
+        "emit delivery",
+        "retry delivery",
+        "delivered/failed/denied",
+        "replay",
+        "register inbound integration",
+        "verify inbound receipt",
+        "persist replay protection"
+      ],
+      "surfaces": {
+        "sdk": "implemented",
+        "runtime": "implemented",
+        "http": "implemented",
+        "cli": "implemented",
+        "tests": "implemented",
+        "docs": "implemented"
+      },
+      "portability": {
+        "portable": true,
+        "notes": "Durable endpoint/delivery contract is portable; HTTP transport/signing behavior is adapter-specific."
+      },
+      "gaps": [
+        "No explicit endpoint verification/challenge contract found.",
+        "Exactly-once delivery is not claimed.",
+        "HTTP-specific assumptions remain in the built-in runtime surface."
+      ]
+    },
+    {
+      "id": "jobs",
+      "name": "Jobs",
+      "status": "implemented",
+      "qualifiesAsCapability": true,
+      "capabilityNames": [
+        "jobs.read",
+        "jobs.create",
+        "jobs.retry",
+        "jobs.execute"
+      ],
+      "contractDefinedIn": [
+        "src/jobs/models.ts",
+        "src/jobs/service.ts",
+        "src/runtime/appport.ts",
+        "src/runtime/management.ts"
+      ],
+      "implementation": [
+        "src/jobs/service.ts",
+        "src/jobs/store.ts",
+        "src/jobs/worker.ts"
+      ],
+      "durableState": [
+        "Jobs",
+        "JobAuditEvents",
+        "ServiceEffectEvidence"
+      ],
+      "authority": {
+        "owner": "tenant + application",
+        "principalModel": "verified principal at enqueue; attested durable principal at execution",
+        "enforcementPoint": "ServiceGateway"
+      },
+      "lifecycle": [
+        "enqueue",
+        "scheduled/pending",
+        "lease/running",
+        "completed",
+        "retrying",
+        "failed",
+        "manual retry"
+      ],
+      "idempotency": {
+        "durableRetryState": true,
+        "exactlyOnce": false,
+        "notes": "Lease recovery supports at-least-once style execution."
+      },
+      "surfaces": {
+        "sdk": "implemented",
+        "runtime": "implemented",
+        "http": "implemented",
+        "cli": "implemented",
+        "tests": "implemented",
+        "docs": "implemented"
+      },
+      "gaps": [
+        "No first-class cancel surface found.",
+        "No generic idempotency key for job creation."
+      ]
+    },
+    {
+      "id": "schedules",
+      "name": "Schedules",
+      "status": "implemented",
+      "qualifiesAsCapability": true,
+      "capabilityNames": [
+        "schedules.read",
+        "schedules.create",
+        "schedules.cancel"
+      ],
+      "contractDefinedIn": [
+        "src/schedules/models.ts",
+        "src/schedules/service.ts",
+        "src/runtime/appport.ts"
+      ],
+      "implementation": [
+        "src/schedules/service.ts",
+        "src/jobs/service.ts"
+      ],
+      "durableState": [
+        "JobSchedules",
+        "JobAuditEvents"
+      ],
+      "authority": {
+        "owner": "tenant + application",
+        "principalModel": "verified principal on create/cancel; downstream jobs inherit durable principal",
+        "enforcementPoint": "ServiceGateway"
+      },
+      "lifecycle": [
+        "create",
+        "enabled",
+        "materialize job",
+        "advance next run time",
+        "disable/cancel"
+      ],
+      "surfaces": {
+        "sdk": "implemented",
+        "runtime": "implemented",
+        "http": "implemented",
+        "cli": "partial",
+        "tests": "implemented",
+        "docs": "partial"
+      },
+      "gaps": [
+        "No timezone field.",
+        "No explicit missed-run policy.",
+        "Recurrence model is only an interval string."
+      ]
+    },
+    {
+      "id": "notifications",
+      "name": "Notifications",
+      "status": "implemented",
+      "qualifiesAsCapability": true,
+      "capabilityNames": [
+        "notifications.read",
+        "notifications.send",
+        "notifications.update",
+        "notifications.delete"
+      ],
+      "contractDefinedIn": [
+        "src/notifications/models.ts",
+        "src/notifications/service.ts",
+        "src/notifications/http.ts",
+        "src/runtime/appport.ts"
+      ],
+      "implementation": [
+        "src/notifications/service.ts",
+        "src/notifications/channels.ts",
+        "src/notifications/sensitive.ts",
+        "src/storage/notifications.ts"
+      ],
+      "durableState": [
+        "Notifications",
+        "NotificationDeliveries",
+        "NotificationAuditEvents"
+      ],
+      "authority": {
+        "owner": "tenant + application; recipient is a protected resource attribute",
+        "principalModel": "verified principal for mutations; runtime/job path for delivery",
+        "enforcementPoint": "ServiceGateway"
+      },
+      "lifecycle": [
+        "create/send",
+        "pending/unread",
+        "delivery attempts per channel",
+        "delivered/retrying/failed",
+        "read/acknowledged/dismissed",
+        "expired",
+        "delete"
+      ],
+      "idempotency": {
+        "durableRetryState": true,
+        "createIdempotencyKey": true,
+        "deliveryIdempotencyKey": true,
+        "exactlyOnce": false
+      },
+      "surfaces": {
+        "sdk": "implemented",
+        "runtime": "implemented",
+        "http": "implemented",
+        "cli": "missing",
+        "tests": "implemented",
+        "docs": "implemented"
+      },
+      "gaps": [
+        "No suppression model found.",
+        "Browser delivery is pointer-style, not a complete transport abstraction."
+      ]
+    },
+    {
+      "id": "files",
+      "name": "Files metadata",
+      "status": "implemented",
+      "qualifiesAsCapability": true,
+      "capabilityNames": [
+        "files.read",
+        "files.write",
+        "files.delete"
+      ],
+      "contractDefinedIn": [
+        "src/files/models.ts",
+        "src/files/service.ts",
+        "src/runtime/appport.ts"
+      ],
+      "implementation": [
+        "src/files/service.ts",
+        "src/storage/files.ts"
+      ],
+      "durableState": [
+        "Files",
+        "FileAuditEvents"
+      ],
+      "authority": {
+        "owner": "tenant + application; file owner is a protected resource attribute",
+        "principalModel": "verified principal",
+        "enforcementPoint": "ServiceGateway"
+      },
+      "lifecycle": [
+        "create metadata",
+        "update metadata",
+        "soft delete"
+      ],
+      "surfaces": {
+        "sdk": "implemented",
+        "runtime": "implemented",
+        "http": "implemented",
+        "cli": "missing",
+        "tests": "implemented",
+        "docs": "partial"
+      },
+      "gaps": [
+        "No upload/download or blob transport.",
+        "No explicit replacement/version history."
+      ]
+    },
+    {
+      "id": "configuration",
+      "name": "Configuration and credential bindings",
+      "status": "partial",
+      "qualifiesAsCapability": true,
+      "capabilityNames": [
+        "configuration.read",
+        "configuration.write",
+        "configuration.delete",
+        "credential.attach",
+        "credential.rotate",
+        "credential.detach"
+      ],
+      "contractDefinedIn": [
+        "src/configuration/models.ts",
+        "src/configuration/service.ts",
+        "src/configuration/http.ts",
+        "src/runtime/management.ts"
+      ],
+      "implementation": [
+        "src/configuration/service.ts",
+        "src/configuration/storage.ts",
+        "src/configuration/ui.ts"
+      ],
+      "durableState": [
+        "ConfigurationVariables",
+        "ConfigurationSecrets",
+        "ConfigurationAuditEvents"
+      ],
+      "authority": {
+        "owner": "tenant + application + environment",
+        "principalModel": "verified principal; credential refs resolved only inside authorized execution contexts",
+        "enforcementPoint": "ServiceGateway"
+      },
+      "lifecycle": [
+        "create variable/binding",
+        "update/rotate",
+        "list/read",
+        "delete/detach"
+      ],
+      "surfaces": {
+        "sdk": "implemented",
+        "runtime": "missing",
+        "http": "implemented",
+        "cli": "missing",
+        "tests": "implemented",
+        "docs": "implemented"
+      },
+      "gaps": [
+        "No application.configuration facade.",
+        "Not mounted by default in the built-in runtime."
+      ]
+    },
+    {
+      "id": "secrets",
+      "name": "Secrets protocol",
+      "status": "partial",
+      "qualifiesAsCapability": false,
+      "hasCapabilityIdentifiers": false,
+      "capabilityIdentifierStatus": "no-implemented-capability-surface",
+      "contractDefinedIn": [
+        "src/secrets/models.ts",
+        "src/secrets/errors.ts",
+        "src/secrets/protocol.ts",
+        "appport.flow"
+      ],
+      "implementation": [
+        "src/secrets/index.ts",
+        "src/secrets/models.ts",
+        "src/secrets/errors.ts",
+        "src/secrets/protocol.ts",
+        "src/runtime/appport.ts",
+        "appport.flow"
+      ],
+      "durableState": [
+        "Secrets",
+        "SecretVersions",
+        "SecretAuditEvents"
+      ],
+      "authority": {
+        "owner": "intended tenant-scoped metadata",
+        "principalModel": "external custody / scoped resolver pattern",
+        "enforcementPoint": "incomplete operational surface"
+      },
+      "lifecycle": [
+        "create",
+        "version",
+        "expire",
+        "revoke",
+        "retire",
+        "resolve"
+      ],
+      "notes": [
+        "Lifecycle is modeled in types and flow definitions only; no complete runtime capability surface was found.",
+        "No concrete SecretService-style runtime surface was found in the audited revision."
+      ],
+      "surfaces": {
+        "sdk": "partial",
+        "runtime": "missing",
+        "http": "missing",
+        "cli": "missing",
+        "tests": "partial",
+        "docs": "partial"
+      },
+      "gaps": [
+        "No concrete runtime capability.",
+        "No application.secrets facade.",
+        "Agent-facing discoverability is poor without reading source."
+      ]
+    },
+    {
+      "id": "events",
+      "name": "Runtime events and subscriptions",
+      "status": "partial",
+      "qualifiesAsCapability": false,
+      "hasCapabilityIdentifiers": false,
+      "capabilityIdentifierStatus": "not-a-capability",
+      "contractDefinedIn": [
+        "src/runtime/platform.ts",
+        "src/runtime/appport.ts"
+      ],
+      "implementation": [
+        "src/runtime/platform.ts",
+        "src/runtime/appport.ts"
+      ],
+      "durableState": [],
+      "authority": {
+        "owner": "process-local runtime",
+        "principalModel": "runtime/http caller; downstream effects require verified principal",
+        "enforcementPoint": "runtime plus ServiceGateway for consequential effects"
+      },
+      "lifecycle": [
+        "publish",
+        "retain in memory",
+        "replay via last-event-id",
+        "drop on restart or retention eviction"
+      ],
+      "surfaces": {
+        "sdk": "implemented",
+        "runtime": "implemented",
+        "http": "implemented",
+        "cli": "missing",
+        "tests": "partial",
+        "docs": "partial"
+      },
+      "gaps": [
+        "Not durable.",
+        "HTTP/SSE assumptions leak into the surface.",
+        "Should not be treated as authoritative application state."
+      ]
+    }
+  ],
+  "relationships": [
+    {
+      "from": "events",
+      "to": "webhooks"
+    },
+    {
+      "from": "schedules",
+      "to": "jobs"
+    },
+    {
+      "from": "notifications",
+      "to": "jobs",
+      "via": "notification deliveries"
+    },
+    {
+      "from": "configuration",
+      "to": "secrets",
+      "via": "credential references resolved through external custody"
+    },
+    {
+      "from": "webhooks",
+      "to": "secrets",
+      "via": "signing credential references resolved through external custody"
+    }
+  ]
+}
