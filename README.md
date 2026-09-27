@@ -93,3 +93,21 @@ Participants can be `person`, `agent`, `device`, or `organization`.
 ```bash
 npm test
 ```
+
+## Run the living demo
+
+```bash
+npm install
+node examples/reality-runtime-demo/demo.mjs
+```
+
+See `examples/reality-runtime-demo/README.md` for the demo sequence and `docs/reality-runtime-primitive.md` for the primitive evaluation.
+
+## Run the healthcare demonstration
+
+```bash
+npm install
+node examples/reality-runtime-healthcare/demo.mjs
+```
+
+See `examples/reality-runtime-healthcare/README.md` for the scenario and `docs/reality-runtime-healthcare.md` for the healthcare-specific evaluation.

@@ -47,6 +47,12 @@ export class UnauthorizedActionError extends RealityRuntimeError {
   }
 }
 
+export class ReplayReadOnlyError extends RealityRuntimeError {
+  constructor(message = 'Historical replay experiences are read-only and cannot mutate current reality.') {
+    super('ReplayReadOnly', message);
+  }
+}
+
 export class PresenceNotFoundError extends RealityRuntimeError {
   constructor(message = 'Presence not found.') {
     super('PresenceNotFound', message);
@@ -79,18 +85,21 @@ export async function createRealityRuntime(options = {}) {
     projectionCollections: options.projectionCollections ?? flowSpec.collections.map(({ name }) => name).filter(name => !RUNTIME_COLLECTIONS.has(name)),
     listActions: options.listActions,
     act: options.act,
+    materializeWorld: options.materializeWorld,
   });
 }
 
 export class RealityRuntime {
-  constructor({ db, flowSpec, projectionCollections, listActions, act }) {
+  constructor({ db, flowSpec, projectionCollections, listActions, act, materializeWorld }) {
     this.db = db;
     this.flowSpec = flowSpec;
+    this.participants = db.collection('Participant');
     this.journeys = db.collection('Journey');
     this.presences = db.collection('Presence');
     this.projectionCollections = [...new Set(projectionCollections)];
     this.listActions = listActions ?? (() => []);
     this.actHandler = act;
+    this.materializeWorldHandler = materializeWorld;
   }
 
   async resolveReality() {
@@ -108,6 +117,7 @@ export class RealityRuntime {
   async createJourney({ id = makeId('journey'), subject, goal, status = 'active', completedAt, startedAt = new Date().toISOString() }) {
     const participant = normalizeParticipant(subject);
     const reality = await this.resolveReality();
+    await this.ensureParticipant({ participant: subject, reality });
     const journey = {
       id,
       subject_id: participant.id,
@@ -124,6 +134,57 @@ export class RealityRuntime {
     return toJourney(journey);
   }
 
+  async ensureParticipant({ participant, displayName, role, reality } = {}) {
+    const normalizedParticipant = normalizeParticipant(participant);
+    const displayNameProvided = displayName !== undefined || Object.prototype.hasOwnProperty.call(participant ?? {}, 'displayName');
+    const roleProvided = role !== undefined || Object.prototype.hasOwnProperty.call(participant ?? {}, 'role');
+    const resolvedDisplayName = displayName !== undefined ? displayName : participant?.displayName;
+    const resolvedRole = role !== undefined ? role : participant?.role;
+    const resolvedReality = reality ?? await this.resolveReality();
+    const existing = await this.participants.get(normalizedParticipant.id);
+    if (existing) {
+      const updates = {};
+      if (displayNameProvided && (existing.display_name ?? null) !== (resolvedDisplayName ?? null)) {
+        updates.display_name = resolvedDisplayName ?? null;
+      }
+      if (roleProvided && (existing.role ?? null) !== (resolvedRole ?? null)) {
+        updates.role = resolvedRole ?? null;
+      }
+      if (existing.reality_application !== resolvedReality.application) {
+        updates.reality_application = resolvedReality.application;
+      }
+      if ((existing.reality_environment ?? null) !== (resolvedReality.environment ?? null)) {
+        updates.reality_environment = resolvedReality.environment ?? null;
+      }
+      if ((existing.reality_flow_revision ?? null) !== (resolvedReality.flowRevision ?? null)) {
+        updates.reality_flow_revision = resolvedReality.flowRevision ?? null;
+      }
+      if (Object.keys(updates).length) {
+        await this.participants.update(normalizedParticipant.id, updates);
+        return toParticipant({ ...existing, ...updates });
+      }
+      return toParticipant(existing);
+    }
+    const record = {
+      id: normalizedParticipant.id,
+      kind: normalizedParticipant.kind,
+      display_name: displayNameProvided ? (resolvedDisplayName ?? null) : undefined,
+      role: roleProvided ? (resolvedRole ?? null) : undefined,
+      created_at: new Date().toISOString(),
+      reality_application: resolvedReality.application,
+      reality_environment: resolvedReality.environment,
+      reality_flow_revision: resolvedReality.flowRevision,
+    };
+    await this.participants.insert(record, record.id);
+    return toParticipant(record);
+  }
+
+  async getParticipant(participantId) {
+    const participant = await this.participants.get(participantId);
+    if (!participant) throw new ParticipantNotFoundError(participantId);
+    return toParticipant(participant);
+  }
+
   async getJourney(journeyId) {
     const journey = await this.journeys.get(journeyId);
     if (!journey) throw new JourneyNotFoundError(journeyId);
@@ -137,6 +198,7 @@ export class RealityRuntime {
       throw new InvalidPerspectiveError('spawn() received both journey and reality, but they refer to different realities.');
     }
     const resolvedReality = resolvedJourney ? journeyReality(resolvedJourney) : await this.#resolveRealityOverride(reality);
+    await this.ensureParticipant({ participant, reality: resolvedReality });
     const presenceRecord = {
       id: makeId('presence'),
       participant_id: normalizedParticipant.id,
@@ -205,12 +267,24 @@ export class RealityRuntime {
     return toPresence({ ...presence, exited_at: exitedAt });
   }
 
-  async materializeWorld() {
+  async #defaultMaterializeWorld() {
     const collections = {};
     for (const name of this.projectionCollections) {
       collections[name] = await this.db.collection(name).all();
     }
     return { collections };
+  }
+
+  async materializeWorld(experience) {
+    if (this.materializeWorldHandler) {
+      return this.materializeWorldHandler({
+        db: this.db,
+        experience,
+        projectionCollections: this.projectionCollections,
+        defaultMaterializeWorld: () => this.#defaultMaterializeWorld(),
+      });
+    }
+    return this.#defaultMaterializeWorld();
   }
 
   observe(experience, callback, { onError } = {}) {
@@ -271,9 +345,9 @@ export class RealityRuntime {
     return experience;
   }
 
-  async cloneExperience(experience) {
+  async cloneExperience(experience, overrides = {}) {
     return this.#instantiateExperience({
-      participant: experience.participant,
+      participant: overrides.participant ?? experience.participant,
       presence: {
         id: experience.presence.id,
         participant_id: experience.presence.participant.id,
@@ -285,13 +359,14 @@ export class RealityRuntime {
         entered_at: new Date(experience.presence.enteredAt).toISOString(),
         exited_at: experience.presence.exitedAt ? new Date(experience.presence.exitedAt).toISOString() : undefined,
       },
-      perspective: {
+      perspective: overrides.perspective ?? {
         ...experience.perspective,
         at: Date.now(),
       },
-      reality: experience.reality,
-      journey: experience.journey,
-      focus: experience.focusState,
+      reality: overrides.reality ?? experience.reality,
+      journey: overrides.journey ?? experience.journey,
+      focus: overrides.focus ?? experience.focusState,
+      mode: overrides.mode ?? experience.modeState,
     });
   }
 
@@ -318,7 +393,7 @@ export class RealityRuntime {
 }
 
 export class Experience {
-  constructor(runtime, { participant, presence, perspective, reality, journey, focus }) {
+  constructor(runtime, { participant, presence, perspective, reality, journey, focus, mode }) {
     this.runtime = runtime;
     this.participant = participant;
     this.presence = toPresence(presence);
@@ -326,6 +401,7 @@ export class Experience {
     this.reality = reality;
     this.journey = journey;
     this.focusState = focus;
+    this.modeState = normalizeExperienceMode(mode);
     this.world = { collections: {} };
     this.availableActions = [];
   }
@@ -339,6 +415,7 @@ export class Experience {
       perspective: this.perspective,
       world: this.world,
       focus: this.focusState,
+      mode: this.modeState,
       availableActions: this.availableActions,
     };
   }
@@ -364,6 +441,18 @@ export class Experience {
     return this.runtime.cloneExperience(this);
   }
 
+  async replay(at) {
+    return this.runtime.cloneExperience(this, {
+      mode: normalizeExperienceMode({ kind: 'replay', at }),
+    });
+  }
+
+  async live() {
+    return this.runtime.cloneExperience(this, {
+      mode: normalizeExperienceMode({ kind: 'live' }),
+    });
+  }
+
   async focus(target) {
     this.focusState = target
       ? {
@@ -380,6 +469,9 @@ export class Experience {
   }
 
   async act(action) {
+    if (this.modeState.kind === 'replay') {
+      throw new ReplayReadOnlyError();
+    }
     const result = await this.runtime.executeAction(this, action);
     await this.refresh();
     return result;
@@ -444,8 +536,46 @@ function toPresence(presence) {
   };
 }
 
+function toParticipant(participant) {
+  return {
+    id: participant.id,
+    kind: participant.kind,
+    displayName: participant.display_name ?? undefined,
+    role: participant.role ?? undefined,
+    createdAt: Date.parse(participant.created_at),
+    reality: {
+      application: participant.reality_application,
+      environment: participant.reality_environment ?? undefined,
+      flowRevision: participant.reality_flow_revision ?? undefined,
+    },
+  };
+}
+
 function sameParticipant(left, right) {
   return left.id === right.id && left.kind === right.kind;
+}
+
+function normalizeExperienceMode(mode) {
+  if (!mode || mode.kind === undefined || mode.kind === 'live') {
+    return { kind: 'live' };
+  }
+  if (mode.kind === 'replay') {
+    return {
+      kind: 'replay',
+      at: normalizeReplayAt(mode.at),
+    };
+  }
+  throw new InvalidPerspectiveError(`Unsupported experience mode: ${mode.kind}`);
+}
+
+function normalizeReplayAt(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value;
+  if (value instanceof Date) return value.getTime();
+  if (typeof value === 'string') {
+    const parsed = Date.parse(value);
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  throw new InvalidPerspectiveError(`Replay mode requires a valid timestamp. Received: ${String(value)}`);
 }
 
 function makeId(prefix) {

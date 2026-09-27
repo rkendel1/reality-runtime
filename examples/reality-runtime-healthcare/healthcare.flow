@@ -1,0 +1,228 @@
+flow_version 1
+
+app HealthcareDemoReality {
+  collection Participant {
+    kind: enum(person, agent, device, organization)
+    display_name: text?
+    role: text?
+    created_at: datetime
+    reality_application: text
+    reality_environment: text?
+    reality_flow_revision: text?
+    index kind using hash(kind)
+  }
+
+  collection Journey {
+    subject_id: text
+    subject_kind: enum(person, agent, device, organization)
+    goal: text
+    status: enum(active, paused, completed, abandoned)
+    started_at: datetime
+    completed_at: datetime?
+    reality_application: text
+    reality_environment: text?
+    reality_flow_revision: text?
+    index subject_id using hash(subject_id)
+  }
+
+  collection Presence {
+    participant_id: text
+    participant_kind: enum(person, agent, device, organization)
+    journey_id: text?
+    reality_application: text
+    reality_environment: text?
+    reality_flow_revision: text?
+    entered_at: datetime
+    exited_at: datetime?
+    index participant_id using hash(participant_id)
+    index journey_id using hash(journey_id)
+  }
+
+  collection Employer {
+    name: text
+    created_at: datetime
+  }
+
+  collection HealthPlan {
+    name: text
+    created_at: datetime
+  }
+
+  collection BenefitPlan {
+    employer: ref Employer
+    health_plan: ref HealthPlan
+    name: text
+    status: text
+    created_at: datetime
+    index employer using hash(employer)
+    index health_plan using hash(health_plan)
+  }
+
+  collection Member {
+    employer: ref Employer
+    benefit_plan: ref BenefitPlan
+    display_name: text
+    member_number: text
+    created_at: datetime
+    index employer using hash(employer)
+    index benefit_plan using hash(benefit_plan)
+  }
+
+  collection Provider {
+    display_name: text
+    specialty: text
+    created_at: datetime
+  }
+
+  collection Coverage {
+    member: ref Member
+    benefit_plan: ref BenefitPlan
+    health_plan: ref HealthPlan
+    status: text
+    service: text
+    deductible_remaining: text
+    estimated_member_responsibility: text
+    updated_at: datetime
+    index member using hash(member)
+    index benefit_plan using hash(benefit_plan)
+    index health_plan using hash(health_plan)
+  }
+
+  collection Encounter {
+    member: ref Member
+    provider: ref Provider
+    service: text
+    status: text
+    clinical_summary: text
+    updated_at: datetime
+    index member using hash(member)
+    index provider using hash(provider)
+  }
+
+  collection Authorization {
+    member: ref Member
+    provider: ref Provider
+    health_plan: ref HealthPlan
+    encounter: ref Encounter
+    requested_service: text
+    status: text
+    decision_reason: text?
+    evidence: text?
+    reviewed_by: text?
+    updated_at: datetime
+    index member using hash(member)
+    index provider using hash(provider)
+    index health_plan using hash(health_plan)
+    index encounter using hash(encounter)
+  }
+
+  collection Claim {
+    member: ref Member
+    provider: ref Provider
+    health_plan: ref HealthPlan
+    encounter: ref Encounter
+    status: text
+    amount: text
+    member_responsibility: text
+    updated_at: datetime
+    index member using hash(member)
+    index provider using hash(provider)
+    index health_plan using hash(health_plan)
+    index encounter using hash(encounter)
+  }
+
+  collection CareJourney {
+    member: ref Member
+    encounter: ref Encounter
+    authorization: ref Authorization
+    claim: ref Claim
+    status: text
+    updated_at: datetime
+    index member using hash(member)
+    index encounter using hash(encounter)
+  }
+
+  collection HealthcareEvent {
+    sequence: text
+    actor_id: text
+    actor_role: text
+    kind: text
+    entity_type: text
+    entity_id: text
+    summary: text
+    effect_json: text
+    created_at: datetime
+    index sequence using hash(sequence)
+    index actor_id using hash(actor_id)
+  }
+
+  policy Participant {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Journey {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Presence {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Employer {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy HealthPlan {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy BenefitPlan {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Member {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Provider {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Coverage {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Encounter {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Authorization {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Claim {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy CareJourney {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy HealthcareEvent {
+    read: authenticated
+    write: authenticated
+  }
+}

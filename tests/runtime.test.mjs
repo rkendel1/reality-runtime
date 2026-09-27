@@ -10,6 +10,13 @@ import {
   UnauthorizedPerspectiveError,
   createRealityRuntime,
 } from '../src/index.js';
+import {
+  DEMO_PARTICIPANTS,
+  createDemoRuntime,
+  projectExperience,
+  seedDemoJourneys,
+  seedDemoWorld,
+} from '../examples/reality-runtime-demo/demo.mjs';
 
 async function makeRuntime(label, options = {}) {
   const root = await fs.mkdtemp(path.join(os.tmpdir(), `${label}-`));
@@ -28,6 +35,8 @@ async function seedWorkspace(runtime) {
   await runtime.db.collection('Workspace').insert({
     id: workspaceId,
     name: 'Assembly Floor',
+    status: 'active',
+    owner: 'alice',
     created_at: new Date().toISOString(),
   }, workspaceId);
   await runtime.db.collection('Room').insert({
@@ -74,6 +83,24 @@ test('two participants inhabit one reality with independent durable Presence rec
   assert.equal(alice.presence.participant.id, 'alice');
   assert.equal(bob.presence.participant.id, 'bob');
   assert.deepEqual(alice.world.collections.Workspace, bob.world.collections.Workspace);
+});
+
+test('spawn durably registers participants in FeltDB', async () => {
+  const { runtime, root } = await makeRuntime('participants');
+  await seedWorkspace(runtime);
+
+  await runtime.spawn({ participant: { kind: 'person', id: 'alice' } });
+  const stored = await runtime.getParticipant('alice');
+  assert.equal(stored.id, 'alice');
+  assert.equal(stored.kind, 'person');
+
+  const recreated = await createRealityRuntime({
+    namespace: 'reality-runtime-tests',
+    path: path.join(root, 'db'),
+  });
+  const persisted = await recreated.getParticipant('alice');
+  assert.equal(persisted.id, 'alice');
+  assert.equal(persisted.reality.application, stored.reality.application);
 });
 
 test('viewAs rejects cross-participant escalation and preserves safe semantics', async () => {
@@ -236,6 +263,29 @@ test('shared reality updates propagate through FeltDB subscriptions with no poll
   assert.equal(order.equipment, equipmentId);
 });
 
+test('different journeys and focus produce different experiences over one shared authoritative world', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'demo-experience-'));
+  const runtime = await createDemoRuntime({ dataPath: path.join(root, 'db'), namespace: 'demo-experience-tests' });
+  await seedDemoWorld(runtime);
+  const journeys = await seedDemoJourneys(runtime);
+
+  const alice = await runtime.spawn({ participant: DEMO_PARTICIPANTS.alice, journeyId: journeys.alice.id });
+  const bob = await runtime.spawn({ participant: DEMO_PARTICIPANTS.bob, journeyId: journeys.bob.id });
+
+  await alice.focus('project');
+  await bob.focus('task:task-2');
+
+  const aliceView = projectExperience(alice.snapshot());
+  const bobView = projectExperience(bob.snapshot());
+
+  assert.deepEqual(aliceView.authoritativeTaskIds, bobView.authoritativeTaskIds);
+  assert.equal(aliceView.focus, 'project');
+  assert.equal(bobView.focus, 'task:task-2');
+  assert.equal(aliceView.tasks.length, 3);
+  assert.deepEqual(bobView.tasks.map(task => task.id), ['task-2']);
+  assert.notEqual(aliceView.journey, bobView.journey);
+});
+
 test('act rejects when no FeltDB-backed action handler is configured', async () => {
   const { runtime } = await makeRuntime('act');
   await seedWorkspace(runtime);
@@ -279,3 +329,27 @@ test('focus is session state, survives authoritative updates, and does not block
   const snapshot = await changed;
   assert.equal(snapshot.focus.target, 'machine-17');
 });
+
+test('re-enter reconstructs journey against the latest shared reality after restart', async () => {
+  const root = await fs.mkdtemp(path.join(os.tmpdir(), 'restart-reality-'));
+  const dataPath = path.join(root, 'db');
+  const first = await createDemoRuntime({ dataPath, namespace: 'restart-reality-tests' });
+  await seedDemoWorld(first);
+  const journeys = await seedDemoJourneys(first);
+  const alice = await first.spawn({ participant: DEMO_PARTICIPANTS.alice, journeyId: journeys.alice.id });
+  await alice.focus('task:task-1');
+  await alice.leave();
+
+  const second = await createDemoRuntime({ dataPath, namespace: 'restart-reality-tests' });
+  const bob = await second.spawn({ participant: DEMO_PARTICIPANTS.bob, journeyId: journeys.bob.id });
+  await bob.act({ type: 'update-task-status', taskId: 'task-1', status: 'done' });
+
+  const third = await createDemoRuntime({ dataPath, namespace: 'restart-reality-tests' });
+  const resumedAlice = await third.enter({ participant: DEMO_PARTICIPANTS.alice, journeyId: journeys.alice.id });
+  const view = projectExperience(resumedAlice.snapshot());
+
+  assert.equal(resumedAlice.journey.id, journeys.alice.id);
+  assert.equal(view.tasks.find(task => task.id === 'task-1')?.status, 'done');
+});
+
+test('embedded FeltDB file runtime should eventually deny cross-user self(field) writes', { todo: 'Blocked on participant-scoped authorization enforcement in the public embedded @feltdb/core runtime.' }, () => {});

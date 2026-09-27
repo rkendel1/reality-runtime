@@ -1,6 +1,17 @@
 flow_version 1
 
 app RealityRuntime {
+  collection Participant {
+    kind: enum(person, agent, device, organization)
+    display_name: text?
+    role: text?
+    created_at: datetime
+    reality_application: text
+    reality_environment: text?
+    reality_flow_revision: text?
+    index kind using hash(kind)
+  }
+
   collection Journey {
     subject_id: text
     subject_kind: enum(person, agent, device, organization)
@@ -29,6 +40,8 @@ app RealityRuntime {
 
   collection Workspace {
     name: text
+    status: text?
+    owner: text?
     created_at: datetime
   }
 
@@ -69,6 +82,11 @@ app RealityRuntime {
     details: text
     created_at: datetime
     index workspace using hash(workspace)
+  }
+
+  policy Participant {
+    read: authenticated
+    write: authenticated
   }
 
   policy Journey {
