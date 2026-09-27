@@ -229,6 +229,11 @@ export async function focusHealthcareParticipants(experiences) {
   return experiences;
 }
 
+export async function refreshHealthcareParticipants(experiences) {
+  await Promise.all(Object.values(experiences).map(experience => experience.refresh()));
+  return experiences;
+}
+
 export function projectHealthcareExperience(snapshot) {
   const participants = indexById(snapshot.world.collections.Participant ?? []);
   const members = indexById(snapshot.world.collections.Member ?? []);
@@ -380,15 +385,16 @@ export async function runHealthcareDemo() {
   const developerSawSubmission = waitForAuthorizationStatus(experiences.developer, 'submitted');
   await experiences.provider.act({ type: 'submit-authorization' });
   await Promise.all([memberSawSubmission, planSawSubmission, developerSawSubmission]);
+  await refreshHealthcareParticipants(experiences);
   logStep('3 — Provider submits authorization', 'One mutation updates the shared reality and multiple participant experiences react without polling.');
   console.log(renderPanels(experiencesToSnapshots(experiences)));
 
+  const memberSawApproval = waitForAuthorizationStatus(experiences.member, 'approved');
+  const providerSawApproval = waitForAuthorizationStatus(experiences.provider, 'approved');
   await experiences.healthPlan.act({ type: 'review-authorization' });
   await experiences.healthPlan.act({ type: 'approve-authorization' });
-  await Promise.all([
-    waitForAuthorizationStatus(experiences.member, 'approved'),
-    waitForAuthorizationStatus(experiences.provider, 'approved'),
-  ]);
+  await Promise.all([memberSawApproval, providerSawApproval]);
+  await refreshHealthcareParticipants(experiences);
   logStep('4 — Health plan reviews and approves', 'The plan action becomes durable state, then Member and Provider observe the same approval from their own experiences.');
   console.log(renderPanels(experiencesToSnapshots(experiences)));
 
@@ -403,12 +409,14 @@ export async function runHealthcareDemo() {
   const restartedRuntime = await createHealthcareDemoRuntime({ dataPath });
   const resumed = await enterHealthcareParticipants(restartedRuntime, journeys);
   await focusHealthcareParticipants(resumed);
+  await refreshHealthcareParticipants(resumed);
   console.log(renderPanels(experiencesToSnapshots(resumed)));
 
   const memberSawClaim = waitForClaimStatus(resumed.member, 'submitted');
   const planSawClaim = waitForClaimStatus(resumed.healthPlan, 'submitted');
   await resumed.provider.act({ type: 'submit-claim' });
   await Promise.all([memberSawClaim, planSawClaim]);
+  await refreshHealthcareParticipants(resumed);
   logStep('8 — Current action after replay', 'Replay stays read-only; an authorized current participant acts on live reality and everyone updates again.');
   console.log(renderPanels(experiencesToSnapshots(resumed)));
 

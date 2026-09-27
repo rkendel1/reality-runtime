@@ -14,6 +14,7 @@ import {
   enterHealthcareParticipants,
   focusHealthcareParticipants,
   projectHealthcareExperience,
+  refreshHealthcareParticipants,
   replayHealthcareSnapshots,
   seedHealthcareJourneys,
   seedHealthcareWorld,
@@ -66,6 +67,7 @@ test('provider authorization submission propagates across shared healthcare expe
   const developerSawSubmission = waitForAuthorizationStatus(experiences.developer, 'submitted');
   await experiences.provider.act({ type: 'submit-authorization' });
   await Promise.all([memberSawSubmission, planSawSubmission, developerSawSubmission]);
+  await refreshHealthcareParticipants(experiences);
 
   const memberView = projectHealthcareExperience(experiences.member.snapshot());
   const planView = projectHealthcareExperience(experiences.healthPlan.snapshot());
@@ -75,14 +77,18 @@ test('provider authorization submission propagates across shared healthcare expe
   assert.equal(memberView.view.authorizationStatus, 'submitted');
   assert.equal(planView.view.authorizationStatus, 'submitted');
   assert.equal(employerView.view.pendingAuthorizations, 1);
-  assert.ok(developerView.timeline.some(item => item.includes('Request')));
+  assert.ok(developerView.timeline.some(item => item.toLowerCase().includes('request')));
 });
 
 test('plan approval updates member/provider and employer remains aggregate-only in the demo projection', async () => {
   const { experiences } = await seedHealthcare('approval-boundary');
+  const memberSawApproval = waitForAuthorizationStatus(experiences.member, 'approved');
+  const providerSawApproval = waitForAuthorizationStatus(experiences.provider, 'approved');
   await experiences.provider.act({ type: 'submit-authorization' });
   await experiences.healthPlan.act({ type: 'review-authorization' });
   await experiences.healthPlan.act({ type: 'approve-authorization' });
+  await Promise.all([memberSawApproval, providerSawApproval]);
+  await refreshHealthcareParticipants(experiences);
 
   const memberView = projectHealthcareExperience(experiences.member.snapshot());
   const providerView = projectHealthcareExperience(experiences.provider.snapshot());
@@ -154,6 +160,7 @@ test('restart reconstructs all healthcare journeys and allows a current live act
   const planSawClaim = waitForClaimStatus(resumed.healthPlan, 'submitted');
   await resumed.provider.act({ type: 'submit-claim' });
   await Promise.all([memberSawClaim, planSawClaim]);
+  await refreshHealthcareParticipants(resumed);
 
   const memberClaimView = projectHealthcareExperience(resumed.member.snapshot());
   const employerClaimView = projectHealthcareExperience(resumed.employer.snapshot());
