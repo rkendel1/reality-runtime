@@ -1,0 +1,108 @@
+flow_version 1
+
+app RealityRuntime {
+  collection Journey {
+    subject_id: text
+    subject_kind: enum(person, agent, device, organization)
+    goal: text
+    status: enum(active, paused, completed, abandoned)
+    started_at: datetime
+    completed_at: datetime?
+    reality_application: text
+    reality_environment: text?
+    reality_flow_revision: text?
+    index subject_id using hash(subject_id)
+  }
+
+  collection Presence {
+    participant_id: text
+    participant_kind: enum(person, agent, device, organization)
+    journey_id: text?
+    reality_application: text
+    reality_environment: text?
+    reality_flow_revision: text?
+    entered_at: datetime
+    exited_at: datetime?
+    index participant_id using hash(participant_id)
+    index journey_id using hash(journey_id)
+  }
+
+  collection Workspace {
+    name: text
+    created_at: datetime
+  }
+
+  collection Room {
+    workspace: ref Workspace
+    name: text
+    created_at: datetime
+    index workspace using hash(workspace)
+  }
+
+  collection Equipment {
+    workspace: ref Workspace
+    room: ref Room
+    name: text
+    status: text
+    created_at: datetime
+    updated_at: datetime
+    index workspace using hash(workspace)
+    index room using hash(room)
+  }
+
+  collection WorkOrder {
+    workspace: ref Workspace
+    equipment: ref Equipment
+    summary: text
+    status: text
+    assigned_to: text?
+    created_at: datetime
+    updated_at: datetime
+    index workspace using hash(workspace)
+    index equipment using hash(equipment)
+  }
+
+  collection WorkspaceEvent {
+    workspace: ref Workspace
+    participant_id: text
+    kind: text
+    details: text
+    created_at: datetime
+    index workspace using hash(workspace)
+  }
+
+  policy Journey {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Presence {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Workspace {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Room {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy Equipment {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy WorkOrder {
+    read: authenticated
+    write: authenticated
+  }
+
+  policy WorkspaceEvent {
+    read: authenticated
+    write: authenticated
+  }
+}
